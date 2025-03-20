@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRC Guard Chatbot</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <header>
+            <h1><i class="fas fa-shield-alt"></i> GRC Guard Chatbot</h1>
+        </header>
+        <div class="chat-box" id="chat-box">
+            <div class="message bot">👋 Welcome! Ask me anything about GRC, cybersecurity, or compliance.</div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Type your question...">
+            <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+        
+        <div class="file-upload">
+            <input type="file" id="file-upload" accept=".pdf">
+            <label for="file-upload">Choose PDF</label>
+            <button onclick="uploadFile()"><i class="fas fa-upload"></i> Upload PDF</button>
+            <p id="upload-status"></p>
+        </div>
+        
+        <div class="pdf-viewer">
+            <iframe id="pdf-frame"></iframe>
+        </div>
+        
+        <div class="session-buttons">
+            <button onclick="endSession()">End Session</button>
+            <button onclick="startNewSession()">Start New Session</button>
+        </div>
+    </div>
+
+    <script>
+        function sendMessage() {
+            let input = document.getElementById("user-input");
+            let message = input.value.trim();
+            if (message === "") return;
+            
+            let chatBox = document.getElementById("chat-box");
+            let userMessage = document.createElement("div");
+            userMessage.className = "message user";
+            userMessage.innerHTML = `<i class="fas fa-user"></i> ${message}`;
+            chatBox.appendChild(userMessage);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            fetch("/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let botMessage = document.createElement("div");
+                botMessage.className = "message bot";
+                botMessage.innerHTML = `<i class="fas fa-robot"></i> ${data.answer} <br><strong>Severity:</strong> ${data.severity}`;
+                chatBox.appendChild(botMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+            
+            input.value = "";
+        }
+
+        function endSession() {
+            fetch("/end_session", { method: "POST" })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                document.getElementById("pdf-frame").style.display = "none"; // Hide the PDF viewer
+                document.getElementById("upload-status").innerText = "";
+            });
+        }
+
+        function startNewSession() {
+            fetch("/start_new_session", { method: "POST" })
+            .then(response => response.json())
+            .then(data => {
+                // Update status message
+                document.getElementById("upload-status").innerText = "🚀 A new session has started! Begin chatting and upload your files.";
+
+                // Clear chat box
+                let chatBox = document.getElementById("chat-box");
+                chatBox.innerHTML = '<div class="message bot">👋 Welcome! Ask me anything about GRC, cybersecurity, or compliance.</div>';
+
+                // Hide PDF preview
+                let pdfFrame = document.getElementById("pdf-frame");
+                pdfFrame.style.display = "none";
+                pdfFrame.src = "";
+
+                // Reset file input
+                document.getElementById("file-upload").value = "";
+
+                console.log("✅ New session started, UI has been reset.");
+            })
+            .catch(error => console.error("❌ Error starting new session:", error));
+        }
+
+        function uploadFile() {
+            let fileInput = document.getElementById("file-upload");
+            let file = fileInput.files[0];
+            let statusText = document.getElementById("upload-status");
+            let pdfFrame = document.getElementById("pdf-frame");
+
+            if (!file) {
+                statusText.innerText = "❌ No file selected!";
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("file", file);
+
+            statusText.innerText = "⏳ Uploading file... Please wait.";
+
+            fetch("/upload", { method: "POST", body: formData })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    statusText.innerText = "❌ Upload failed: " + data.error;
+                } else {
+                    statusText.innerText = "✅ " + data.message;
+                    pdfFrame.src = `/uploads/${file.name}`;
+                    pdfFrame.style.display = "block";
+                }
+            })
+            .catch(() => {
+                statusText.innerText = "❌ Upload error!";
+            });
+        }
+    </script>
+</body>
+</html>
